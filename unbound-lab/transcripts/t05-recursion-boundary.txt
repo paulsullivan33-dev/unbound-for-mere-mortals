@@ -1,0 +1,33 @@
+# The boundary: asking Unbound to do its real job — walk the
+# public DNS from the roots — from inside this sandbox.
+# The config carries the root hints and the root trust anchor,
+# tcp-upstream: yes is set, and dig is patient:
+
+$ dig +tcp +time=30 -p 18086 @127.0.0.1 example.com A
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 28935
+;; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+
+# What Unbound recorded while trying (its log, verbatim):
+$ tail -6 unbound.log
+[1793399358] unbound[68487:0] error: read (in tcp s): Connection reset by peer for 192.5.5.241 port 53
+[1793399358] unbound[68487:0] error: read (in tcp s): Connection reset by peer for 192.36.148.17 port 53
+[1793399358] unbound[68487:0] error: read (in tcp s): Connection reset by peer for 192.33.4.12 port 53
+[1793399358] unbound[68487:0] error: read (in tcp s): Connection reset by peer for 192.112.36.4 port 53
+[1793399358] unbound[68487:0] error: read (in tcp s): Connection reset by peer for 198.41.0.4 port 53
+[1793399358] unbound[68487:0] error: read (in tcp s): Connection reset by peer for 192.5.5.241 port 53
+
+# Those five addresses are root servers out of the hints file
+# (198.41.0.4 = a.root-servers.net, 192.5.5.241 = b, 192.33.4.12
+# = c, 192.112.36.4 = g, 192.36.148.17 = i). Unbound found them,
+# opened TCP to port 53 — and the sandbox reset every connection.
+# UDP never even gets that far (t01). So inside this lab there is
+# no path from Unbound to the public DNS, and DNSSEC validation
+# of public names cannot complete either: the validator never
+# receives a single DNSKEY to check. The anchor loading, the
+# priming, the attempts and the SERVFAIL are all real; what a
+# successful walk looks like is taught from the documentation
+# and labelled as such in the guide.

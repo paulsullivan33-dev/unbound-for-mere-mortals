@@ -1,0 +1,15 @@
+# First sandbox fact the lab depends on: can anything send UDP at all?
+# A minimal round trip, one Python process to another, loopback only:
+
+$ python3 loopback-udp-test.py
+Traceback (most recent call last):
+  File "<stdin>", line 4, in <module>
+PermissionError: [Errno 1] Operation not permitted
+
+# The sendto() itself is refused by the sandbox, even to 127.0.0.1.
+# Consequences the rest of the lab is built around:
+#  - clients ask Unbound over TCP (dig +tcp), which works;
+#  - Unbound is configured tcp-upstream: yes for its own upstream
+#    queries, so the lab caching tests can still run over TCP;
+#  - real recursion to the internet root servers, which starts
+#    with UDP in the real world, cannot leave this machine.

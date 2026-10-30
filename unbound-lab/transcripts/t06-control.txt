@@ -1,0 +1,37 @@
+# unbound-control: the operator's handle on a running server.
+# (In the lab config the control channel is a unix socket in the
+#  lab directory with control-use-cert: no; on a real install it
+#  is TLS on 127.0.0.1:8953 with certificates from
+#  unbound-control-setup — same commands either way.)
+
+# www.lab is sitting in cache from t04. Flush just that name:
+$ unbound-control -c unbound.conf flush www.lab
+ok
+$ dig ... www.lab A; wc -l < upstream.log
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 35906
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; ANSWER SECTION:
+www.lab.		120	IN	A	203.0.113.7
+
+1
+
+# A handful of the counters, after all of the lab's asks:
+$ unbound-control -c unbound.conf stats_noreset | grep -E "total.num.(queries|cachehit|cachemiss|prefetch|recursivereplies)="
+total.num.queries=8
+total.num.cachemiss=4
+total.num.prefetch=2
+total.num.recursivereplies=4
+
+# And the tidy stop the guide teaches (not kill -9):
+$ unbound-control -c unbound.conf stop; sleep 1; dig +tcp +time=3 -p 18086 @127.0.0.1 nas.home.arpa A
+ok
+;; Connection to 127.0.0.1#18086(127.0.0.1) for nas.home.arpa failed: connection refused.
+;; no servers could be reached
+;; Connection to 127.0.0.1#18086(127.0.0.1) for nas.home.arpa failed: connection refused.
+;; no servers could be reached
+;; Connection to 127.0.0.1#18086(127.0.0.1) for nas.home.arpa failed: connection refused.
+;; no servers could be reached

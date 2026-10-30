@@ -1,0 +1,43 @@
+# Installing Unbound on the lab machine (Ubuntu 24.04, shared sandbox)
+# The normal route first:
+
+$ apt-cache policy unbound
+unbound:
+  Installed: (none)
+  Candidate: 1.19.2-1ubuntu3.12
+  Version table:
+     1.19.2-1ubuntu3.12 500
+        500 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages
+        500 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages
+        500 http://mirror.cogentco.com/pub/linux/ubuntu noble-security/universe amd64 Packages
+     1.19.2-1ubuntu3 500
+        500 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 Packages
+        500 http://mirror.cogentco.com/pub/linux/ubuntu noble/universe amd64 Packages
+
+$ sudo apt-get install -y unbound
+E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 62745 (apt-get)
+E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), is another process using it?
+# (verbatim from the attempt: another tenant of this shared machine held the
+#  dpkg lock. The fallback, used by other guides in this series: download the
+#  identical distribution packages and unpack them, unmodified, into a
+#  scratch tree. apt-get download needs no dpkg lock.)
+
+$ apt-get download unbound libunbound8 unbound-anchor dns-root-data libhiredis1.1.0 libprotobuf-c1
+
+$ for f in *.deb; do dpkg -x "$f" ../root; done; ls ../root/usr/sbin/
+unbound
+unbound-anchor
+unbound-checkconf
+unbound-control
+unbound-control-setup
+
+$ unbound -V   (via a wrapper that sets LD_LIBRARY_PATH to the scratch tree)
+Version 1.19.2
+
+Configure line: --build=x86_64-linux-gnu --prefix=/usr --includedir=${prefix}/include --mandir=${prefix}/share/man --infodir=${prefix}/share/info --sysconfdir=/etc --localstatedir=/var --disable-option-checking --disable-silent-rules --libdir=${prefix}/lib/x86_64-linux-gnu --runstatedir=/run --disable-maintainer-mode --disable-dependency-tracking --with-pythonmodule --with-pyunbound --enable-subnet --enable-dnstap --enable-systemd --enable-cachedb --with-libhiredis --with-libnghttp2 --with-chroot-dir= --with-dnstap-socket-path=/run/dnstap.sock --disable-rpath --with-pidfile=/run/unbound.pid --with-libevent --enable-tfo-client --with-rootkey-file=/usr/share/dns/root.key --enable-tfo-server
+Linked libs: libevent 2.1.12-stable (it uses epoll), OpenSSL 3.0.13 30 Jan 2024
+Linked modules: dns64 python cachedb subnetcache respip validator iterator
+TCP Fastopen feature available
+
+BSD licensed, see LICENSE in source package for details.
+Report bugs to unbound-bugs@nlnetlabs.nl or https://github.com/NLnetLabs/unbound/issues

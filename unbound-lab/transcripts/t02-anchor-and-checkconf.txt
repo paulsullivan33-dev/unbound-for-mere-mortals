@@ -1,0 +1,47 @@
+# The root trust anchor: where DNSSEC validation begins.
+
+$ unbound-anchor -l   (the anchor and CA cert compiled into the tool)
+. IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D
+
+-----BEGIN CERTIFICATE-----
+MIIDdzCCAl+gAwIBAgIBATANBgkqhkiG9w0BAQsFADBdMQ4wDAYDVQQKEwVJQ0FO
+TjEmMCQGA1UECxMdSUNBTk4gQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkxFjAUBgNV
+BAMTDUlDQU5OIFJvb3QgQ0ExCzAJBgNVBAYTAlVTMB4XDTA5MTIyMzA0MTkxMloX
+DTI5MTIxODA0MTkxMlowXTEOMAwGA1UEChMFSUNBTk4xJjAkBgNVBAsTHUlDQU5O
+IENlcnRpZmljYXRpb24gQXV0aG9yaXR5MRYwFAYDVQQDEw1JQ0FOTiBSb290IENB
+    ... (PEM certificate follows; trimmed)
+
+$ cp root/usr/share/dns/root.key ./anchor-test.key   (from the dns-root-data package)
+$ unbound-anchor -a anchor-test.key -v
+/home/hatch/workspace/unbound-labwork/anchor-test.key has content
+fail: the anchor is NOT ok and could not be fixed
+(exit 0)
+
+# Whatever happened above, the distribution also ships the current root
+# anchor as data; the lab config uses it via auto-trust-anchor-file:
+$ cp root/usr/share/dns/root.key ./root.key; cut -c1-76 root.key
+. IN DNSKEY 257 3 8 AwEAAaz/tAm8yTn4Mfeh5eyI96WSVexTBAvkMgJzkKTOiW1vkIbzxeF3
+. IN DNSKEY 257 3 8 AwEAAa96jeuknZlaeSrvyAJj6ZHv28hhOKkx3rLGXVaC6rXTsDc449/c
+# (the two root key-signing keys, keytags 20326 and 38696; each line is one
+#  long base64 key, trimmed here to 76 columns. The matching DS hashes are in
+#  the package's root.ds: ". IN DS 20326 8 2 E06D44B8..." — the same 20326
+#  the builtin anchor above printed.)
+
+# Config checking: the lab config as written...
+$ unbound-checkconf unbound.conf; echo "(exit $?)"
+unbound-checkconf: no errors in /home/hatch/workspace/unbound-labwork/unbound.conf
+(exit 0)
+
+# Deliberately broken configs, so the error shapes are familiar:
+
+$ sed "s/verbosity/verbosit/" unbound.conf > broken1.conf; unbound-checkconf broken1.conf
+/home/hatch/workspace/unbound-labwork/broken1.conf:3: error: unknown keyword 'verbosit'
+/home/hatch/workspace/unbound-labwork/broken1.conf:3: error: stray ':'
+/home/hatch/workspace/unbound-labwork/broken1.conf:3: error: unknown keyword '1'
+read /home/hatch/workspace/unbound-labwork/broken1.conf failed: 3 errors in configuration file
+(exit 1)
+
+$ sed "s/port: 18086/port: eighty-six/" unbound.conf > broken2.conf; unbound-checkconf broken2.conf
+/home/hatch/workspace/unbound-labwork/broken2.conf:6: error: port number expected
+read /home/hatch/workspace/unbound-labwork/broken2.conf failed: 1 errors in configuration file
+(exit 1)

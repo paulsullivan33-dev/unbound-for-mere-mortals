@@ -1,0 +1,111 @@
+# Starting Unbound with the lab config, then asking it questions.
+# All client queries use dig +tcp: UDP sends are refused by this
+# sandbox (t01), and TCP reaches the same answers.
+
+$ unbound -c unbound.conf; sleep 1; cat unbound.pid; head -4 unbound.log
+[1793399192] unbound[68095:0] warning: setrlimit: Operation not permitted
+[1793399192] unbound[68095:0] warning: cannot increase max open fds from 4096 to 4140
+[1793399192] unbound[68095:0] warning: continuing with less udp ports: 4056
+[1793399192] unbound[68095:0] warning: increase ulimit or decrease threads, ports in config to remove this warning
+68096
+[1793399192] unbound[68096:0] notice: init module 0: subnetcache
+[1793399192] unbound[68096:0] warning: subnetcache: serve-expired is set but not working for data originating from the subnet module cache.
+[1793399192] unbound[68096:0] warning: subnetcache: prefetch is set but not working for data originating from the subnet module cache.
+[1793399192] unbound[68096:0] notice: init module 1: validator
+
+# A name the config defines, full dig output, read once in detail:
+$ dig +tcp -p 18086 @127.0.0.1 printer.home.arpa A
+
+; <<>> DiG 9.18.39-0ubuntu0.24.04.8-Ubuntu <<>> +tcp -p 18086 @127.0.0.1 printer.home.arpa A
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 3979
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; QUESTION SECTION:
+;printer.home.arpa.		IN	A
+
+;; ANSWER SECTION:
+printer.home.arpa.	3600	IN	A	192.168.1.50
+
+;; Query time: 0 msec
+;; SERVER: 127.0.0.1#18086(127.0.0.1) (TCP)
+;; WHEN: Fri Oct 30 22:26:33 UTC 2026
+;; MSG SIZE  rcvd: 62
+
+# The same, compactly (+noall +comments +answer) from here on:
+
+$ dig ... nas.home.arpa A
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 39225
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; ANSWER SECTION:
+nas.home.arpa.		3600	IN	A	192.168.1.60
+
+$ dig ... printer.home.arpa AAAA   (no AAAA defined: NOERROR, no answer = NODATA)
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 24209
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+$ dig ... unknown.home.arpa A   (inside the static zone, but not defined)
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 39466
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+$ dig ... wiki.example.internal A; dig ... other.example.internal A
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 39485
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; ANSWER SECTION:
+wiki.example.internal.	3600	IN	A	192.168.1.70
+
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 12470
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+$ dig ... ads.example A; dig ... tracker.ads.example A   (a refuse zone)
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: REFUSED, id: 61164
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: REFUSED, id: 42657
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+$ dig ... -x 192.168.1.50   (the reverse lookup, from local-data-ptr)
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 40344
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; ANSWER SECTION:
+50.1.168.192.in-addr.arpa. 3600	IN	PTR	printer.home.arpa.
+
+
+# What Unbound itself thinks it holds:
+# (the full list also carries the built-in localhost zones; filtered:)
+$ unbound-control -c unbound.conf list_local_data | grep -E "home\.arpa|example\.internal"
+nas.home.arpa.	3600	IN	A	192.168.1.60
+printer.home.arpa.	3600	IN	A	192.168.1.50
+50.1.168.192.in-addr.arpa.	3600	IN	PTR	printer.home.arpa.
+wiki.example.internal.	3600	IN	A	192.168.1.70

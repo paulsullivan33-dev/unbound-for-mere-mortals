@@ -1,0 +1,125 @@
+# Caching, proven with a stand-in upstream — after one honest failure.
+# The lab runs a small fake upstream (unbound-lab/fake-upstream.py)
+# on 127.0.0.1:18087 and a forward-zone sends one private zone to it.
+# It logs every query it receives, so "did Unbound go upstream?" is
+# a count, not a guess. Unbound reaches it over TCP (tcp-upstream:
+# yes — see t01).
+#
+# ATTEMPT 1 used the zone lab.test. It failed, instructively:
+
+$ dig ... www.lab.test A
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 60368
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 1, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+$ wc -l < upstream.log; cat upstream.log
+0
+
+# NXDOMAIN, with the aa (authoritative) flag, and the upstream never
+# saw a packet. The SOA in the AUTHORITY section gave it away:
+# "test. SOA localhost. nobody.invalid." — Unbound answers the
+# special-use TLDs from built-in local zones before any forwarding:
+
+$ unbound-control -c unbound.conf list_local_zones | grep -E "^test\.|^invalid\.|^localhost\."
+test. static
+invalid. static
+example.internal. static
+localhost. redirect
+
+# (RFC 6761: .test, .invalid, .example, .localhost never exist on the
+#  public internet, so Unbound quite correctly refuses to ask.)
+# The lab zone was renamed from lab.test to lab — an undelegated
+# TLD that is not special-use — Unbound and the upstream were
+# restarted, and the counters below start from zero again.
+
+# ATTEMPT 2: the cache miss and the cache hit.
+$ dig ... www.lab A
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 49622
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; ANSWER SECTION:
+www.lab.		120	IN	A	203.0.113.7
+
+$ cat upstream.log
+22:28:31 qtype=1 name=www.lab.
+
+$ sleep 5; dig ... www.lab A   (TTL has counted down; log unchanged)
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 38493
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; ANSWER SECTION:
+www.lab.		115	IN	A	203.0.113.7
+
+$ wc -l < upstream.log
+1
+
+$ unbound-control -c unbound.conf stats_noreset | grep -E "total.num.(queries|cachehit|cachemiss)"
+total.num.queries=2
+total.num.queries_ip_ratelimited=0
+total.num.queries_cookie_valid=0
+total.num.queries_cookie_client=0
+total.num.queries_cookie_invalid=0
+total.num.cachehits=1
+total.num.cachemiss=1
+total.num.queries_timed_out=0
+
+# Prefetch: short.lab lives only 12 seconds (TTL 12 upstream).
+$ dig ... short.lab A
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 32603
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; ANSWER SECTION:
+short.lab.		12	IN	A	203.0.113.8
+
+$ sleep 11; dig ... short.lab A  (1s of TTL left: still a hit,
+#   and asking this close to expiry is what triggers prefetch)
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 20306
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; ANSWER SECTION:
+short.lab.		1	IN	A	203.0.113.8
+
+$ wc -l < upstream.log  (a THIRD upstream query: the prefetch,
+#   which no client asked for)
+3
+$ dig ... short.lab A  (TTL is back near 12: the cache was
+#   refreshed in the background before the old entry died)
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 38396
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; ANSWER SECTION:
+short.lab.		10	IN	A	203.0.113.8
+
+
+# Serve-expired: now the upstream is killed outright.
+$ kill $(cat upstream.pid); sleep 12  (the entry expires)
+$ dig ... short.lab A  (no upstream exists, yet here is the
+#   answer — served past its TTL instead of failing)
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 356
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+;; ANSWER SECTION:
+short.lab.		30	IN	A	203.0.113.8
+
+$ grep -c . upstream.log  (still 3: nothing answered just now)
+3

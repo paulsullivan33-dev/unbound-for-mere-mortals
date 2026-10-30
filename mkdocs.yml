@@ -1,0 +1,28 @@
+site_name: Unbound for Mere Mortals
+site_description: A DNS resolver that runs on your own machine. How Unbound looks up names by walking the DNS from the roots itself, checks the answers with DNSSEC, caches them, and serves names for your own network, with the limits stated plainly.
+site_url: https://paulsullivan33-dev.github.io/unbound-for-mere-mortals/
+copyright: 'Part of <a href="https://paulsullivan33-dev.github.io/mere-mortals/">For Mere Mortals</a> · Text <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, code MIT'
+
+# Guides live at the repo root (nice for GitHub browsing).
+# The deploy workflow copies them into docs/ before building.
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+  - What Unbound Is: what-unbound-is.md
+  - The Moving Parts: the-moving-parts.md
+  - Installing Unbound: installing-unbound.md
+  - The Config File: the-config-file.md
+  - Your First Answers: your-first-answers.md
+  - Names for Your Network: names-for-your-network.md
+  - The Cache at Work: the-cache-at-work.md
+  - DNSSEC — Checking the Answers: dnssec.md
+  - Forwarding on Purpose: forwarding-on-purpose.md
+  - Running It Well: running-it-well.md
+  - Recipes: recipes.md
+  - The Neighbours: the-neighbours.md
+  - Limits: limits.md
+  - Troubleshooting: troubleshooting.md
+  - Glossary: glossary.md
+  - Writing Criteria: criteria.md
